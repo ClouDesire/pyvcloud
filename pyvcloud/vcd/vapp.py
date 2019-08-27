@@ -279,6 +279,27 @@ class VApp(object):
             self.resource.get('href') + '/leaseSettingsSection/', new_section,
             EntityType.LEASE_SETTINGS.value)
 
+    def get_lease(self):
+        """Fetch lease settings data of the vApp.
+
+        :return: an dictionary containing LEASE_SETTINGS Data of the vApp.
+
+        :rtype: dict
+        """
+        self.get_resource()
+        lease_setting = self.resource.LeaseSettingsSection
+        result = {}
+        if hasattr(lease_setting, 'DeploymentLeaseInSeconds'):
+            result['DeploymentLeaseInSeconds'] = \
+                lease_setting.DeploymentLeaseInSeconds
+        if hasattr(lease_setting, 'StorageLeaseInSeconds'):
+            result['StorageLeaseInSeconds'] = \
+                lease_setting.StorageLeaseInSeconds
+        if hasattr(lease_setting, 'StorageLeaseExpiration'):
+            result['StorageLeaseExpiration'] = \
+                lease_setting.StorageLeaseExpiration
+        return result
+
     def change_owner(self, href):
         """Change the ownership of vApp to a given user.
 
@@ -1326,6 +1347,30 @@ class VApp(object):
         raise EntityNotFoundException(
             'Can\'t find network \'%s\'' % network_name)
 
+    def dns_detail_of_vapp_network(self, network_name):
+        """DNS details of vApp network.
+
+        :param str network_name: name of App network.
+        :return:  Dictionary having Dns1, Dns2 and DnsSuffix.
+        e.g.
+        {'Dns1': '10.1.1.1', 'Dns2': '10.1.1.2', 'DnsSuffix':'example.com'}
+        :rtype: dict
+        :raises: Exception: if the network can't be found.
+        """
+        for network_config in self.resource.NetworkConfigSection.NetworkConfig:
+            if network_config.get('networkName') == network_name:
+                ip_scope = network_config.Configuration.IpScopes.IpScope
+                dns_details = {}
+                if hasattr(ip_scope, 'Dns1'):
+                    dns_details['Dns1'] = ip_scope.Dns1
+                if hasattr(ip_scope, 'Dns2'):
+                    dns_details['Dns2'] = ip_scope.Dns2
+                if hasattr(ip_scope, 'DnsSuffix'):
+                    dns_details['DnsSuffix'] = ip_scope.DnsSuffix
+                return dns_details
+        raise EntityNotFoundException(
+            'Can\'t find network \'%s\'' % network_name)
+
     def list_ip_allocations(self, network_name):
         """List all allocated ip of vApp network.
 
@@ -1432,6 +1477,12 @@ class VApp(object):
         task = self.client.post_linked_resource(
             self.resource, RelationType.ENABLE, None, None)
         self.client.get_task_monitor().wait_for_success(task, 60, 1)
+
+    def disable_download(self):
+        """Method to disbale an entity for download."""
+        self.get_resource()
+        self.client.post_linked_resource(self.resource, RelationType.DISABLE,
+                                         None, None)
 
     def download_ova(self, file_name, chunk_size=DEFAULT_CHUNK_SIZE):
         """Downloads a vapp into a local file.
@@ -1592,3 +1643,454 @@ class VApp(object):
                     network_config.get('networkName')
                 })
         return vapp_network_list
+
+    def sync_syslog_settings(self, network_name):
+        """Sync syslog settings of vApp network.
+
+        :param str network_name: name of App network.
+        :return: an object containing EntityType.TASK XML data which represents
+            the asynchronous task that is updating the vApp network.
+        :rtype: lxml.objectify.ObjectifiedElement
+        :raises: Exception: if the network can't be found.
+        """
+        for network_config in self.resource.NetworkConfigSection.NetworkConfig:
+            if network_config.get('networkName') == network_name:
+                return self.client.post_linked_resource(
+                    resource=network_config,
+                    rel=RelationType.SYNC_SYSLOG_SETTINGS,
+                    media_type=EntityType.TASK.value,
+                    contents=None)
+        raise EntityNotFoundException(
+            'Can\'t find network \'%s\'' % network_name)
+
+    def connect_vapp_network_to_ovdc_network(self, network_name,
+                                             orgvdc_network_name):
+        """Connect vapp network to org vdc network.
+
+        :param str network_name: name of App network.
+        :param str orgvdc_network_name: org vdc network name.
+        :return: an object containing EntityType.TASK XML data which represents
+            the asynchronous task that is updating the vApp network.
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        vdc = VDC(
+            self.client,
+            href=find_link(self.resource, RelationType.UP,
+                           EntityType.VDC.value).href)
+        orgvdc_network_href = vdc.get_orgvdc_network_admin_href_by_name(
+            orgvdc_network_name)
+        ovdc_net_res = self.client.get_resource(orgvdc_network_href)
+        vapp_network_href = find_link(
+            resource=self.resource,
+            rel=RelationType.DOWN,
+            media_type=EntityType.vApp_Network.value,
+            name=network_name).href
+        vapp_net_res = self.client.get_resource(vapp_network_href)
+        parent_network = E.ParentNetwork()
+        parent_network.set('href', orgvdc_network_href)
+        parent_network.set('id', ovdc_net_res.get('id'))
+        parent_network.set('name', ovdc_net_res.get('name'))
+        vapp_net_res.Configuration.FenceMode.addprevious(parent_network)
+        vapp_net_res.Configuration.remove(vapp_net_res.Configuration.FenceMode)
+        vapp_net_res.Configuration.ParentNetwork.addnext(
+            E.FenceMode(FenceMode.NAT_ROUTED.value))
+        return self.client.put_linked_resource(
+            resource=vapp_net_res,
+            rel=RelationType.EDIT,
+            media_type=EntityType.vApp_Network.value,
+            contents=vapp_net_res)
+
+    def create_vapp_network_from_ovdc_network(self, orgvdc_network_name):
+        """Create vapp network from org vdc network.
+
+        :param str orgvdc_network_name: org vdc network name.
+        :return: an object containing EntityType.TASK XML data which represents
+            the asynchronous task that is updating the vApp network.
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        vdc = VDC(
+            self.client,
+            href=find_link(self.resource, RelationType.UP,
+                           EntityType.VDC.value).href)
+        orgvdc_network_href = vdc.get_orgvdc_network_admin_href_by_name(
+            orgvdc_network_name)
+        ovdc_net_res = self.client.get_resource(orgvdc_network_href)
+        res_ip_scope = ovdc_net_res.Configuration.IpScopes.IpScope
+
+        self.get_resource()
+        network_config_section = \
+            deepcopy(self.resource.NetworkConfigSection)
+        network_config = E.NetworkConfig(networkName=orgvdc_network_name)
+
+        config = E.Configuration()
+        ip_scopes = E.IpScopes()
+        ip_scope = E.IpScope()
+
+        ip_scope.append(E.IsInherited(True))
+        ip_scope.append(res_ip_scope.Gateway)
+        ip_scope.append(res_ip_scope.SubnetPrefixLength)
+        if hasattr(res_ip_scope, 'Dns1'):
+            ip_scope.append(res_ip_scope.Dns1)
+        if hasattr(res_ip_scope, 'Dns2'):
+            ip_scope.append(res_ip_scope.Dns2)
+        if hasattr(res_ip_scope, 'DnsSuffix'):
+            ip_scope.append(res_ip_scope.DnsSuffix)
+        if hasattr(res_ip_scope, 'IsEnabled'):
+            ip_scope.append(res_ip_scope.IsEnabled)
+        ip_scopes.append(ip_scope)
+        config.append(ip_scopes)
+        parent_network = E.ParentNetwork()
+        parent_network.set('href', orgvdc_network_href)
+        parent_network.set('id', ovdc_net_res.get('id'))
+        parent_network.set('name', ovdc_net_res.get('name'))
+        config.append(parent_network)
+        config.append(E.FenceMode(FenceMode.BRIDGED.value))
+        config.append(E.AdvancedNetworkingEnabled(True))
+        network_config.append(config)
+        network_config.append(E.IsDeployed(False))
+        network_config_section.append(network_config)
+        return self.client.put_linked_resource(
+            self.resource.NetworkConfigSection, RelationType.EDIT,
+            EntityType.NETWORK_CONFIG_SECTION.value, network_config_section)
+
+    def enable_fence_mode(self):
+        """Enable fence mode of vapp network.
+
+        :return: an object containing EntityType.TASK XML data which represents
+            the asynchronous task that is updating the vApp network.
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        self.get_resource()
+        network_config_section = deepcopy(self.resource.NetworkConfigSection)
+        for network_config in network_config_section.NetworkConfig:
+            if network_config.Configuration.IpScopes.IpScope.IsInherited:
+                network_config.Configuration.remove(
+                    network_config.Configuration.FenceMode)
+                network_config.Configuration.ParentNetwork.addnext(
+                    E.FenceMode(FenceMode.NAT_ROUTED.value))
+                features = E.Features()
+                firewall_services = E.FirewallService()
+                firewall_services.append(E.IsEnabled(True))
+                firewall_services.append(E.DefaultAction('drop'))
+                firewall_services.append(E.LogDefaultAction(False))
+                firewall_rule = E.FirewallRule()
+                firewall_rule.append(E.IsEnabled(True))
+                firewall_rule.append(
+                    E.Description('Allow all outgoing traffic'))
+                firewall_rule.append(E.Policy('allow'))
+                protocol = E.Protocols()
+                protocol.append(E.Any(True))
+                firewall_rule.append(protocol)
+                firewall_rule.append(E.DestinationPortRange('Any'))
+                firewall_rule.append(E.DestinationIp('external'))
+                firewall_rule.append(E.SourcePortRange('Any'))
+                firewall_rule.append(E.SourceIp('internal'))
+                firewall_rule.append(E.EnableLogging(False))
+                firewall_services.append(firewall_rule)
+                features.append(firewall_services)
+        return self.client.put_linked_resource(
+            self.resource.NetworkConfigSection, RelationType.EDIT,
+            EntityType.NETWORK_CONFIG_SECTION.value, network_config_section)
+
+    def update_startup_section(self,
+                               vm_name,
+                               order=None,
+                               start_action=None,
+                               start_delay=None,
+                               stop_action=None,
+                               stop_delay=None):
+        """Update startup section of vapp.
+
+        :param str vm_name: name of VM in App.
+        :param int order: start order of vm.
+        :param str start_action: action on VM on start of App.
+        :param int start_delay: start delay of vm.
+        :param str stop_action: action on VM on stop of App.
+        :param int stop_delay: stop delay of vm.
+        :return: an object containing EntityType.TASK XML data which represents
+            the asynchronous task that is updating the vApp startup section.
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        startup_section = self.resource.xpath(
+            'ovf:StartupSection', namespaces=NSMAP)
+        startup_section_href = startup_section[0].get('{' + NSMAP['ns10'] +
+                                                      '}href')
+        startup_section_res = self.client.get_resource(startup_section_href)
+        items = startup_section_res.xpath('ovf:Item', namespaces=NSMAP)
+        for item in items:
+            if item.get('{' + NSMAP['ovf'] + '}id') == vm_name:
+                if order is not None:
+                    item.set('{' + NSMAP['ovf'] + '}order', str(order))
+                if start_action is not None:
+                    item.set('{' + NSMAP['ovf'] + '}startAction', start_action)
+                if start_delay is not None:
+                    item.set('{' + NSMAP['ovf'] + '}startDelay',
+                             str(start_delay))
+                if stop_action is not None:
+                    item.set('{' + NSMAP['ovf'] + '}stopAction', stop_action)
+                if stop_delay is not None:
+                    item.set('{' + NSMAP['ovf'] + '}stopDelay',
+                             str(stop_delay))
+        return self.client.put_linked_resource(
+            startup_section_res,
+            rel=RelationType.EDIT,
+            media_type=EntityType.STARTUP_SECTION.value,
+            contents=startup_section_res)
+
+    def get_startup_section(self):
+        """Get startup section data of vapp.
+
+        :return: a list of dictionary containing startup sections Data of the
+            vApp.
+
+        :rtype: list
+        """
+        startup_section = self.resource.xpath(
+            'ovf:StartupSection', namespaces=NSMAP)
+        items = startup_section[0].xpath('ovf:Item', namespaces=NSMAP)
+        startup_section_info = []
+        for item in items:
+            item_detail = {}
+            item_detail['Id'] = item.get('{' + NSMAP['ovf'] + '}id')
+            item_detail['order'] = item.get('{' + NSMAP['ovf'] + '}order')
+            item_detail['startAction'] = item.get('{' + NSMAP['ovf'] +
+                                                  '}startAction')
+            item_detail['startDelay'] = item.get('{' + NSMAP['ovf'] +
+                                                 '}startDelay')
+            item_detail['stopAction'] = item.get('{' + NSMAP['ovf'] +
+                                                 '}stopAction')
+            item_detail['stopDelay'] = item.get('{' + NSMAP['ovf'] +
+                                                '}stopDelay')
+            startup_section_info.append(item_detail)
+        return startup_section_info
+
+    def get_product_sections(self):
+        """Get product sections data of vapp.
+
+        :return: a list containing dictionary of product sections Data of the
+            vApp.
+
+        :rtype: list
+        """
+        self.get_resource()
+        product_sections_res = self.client.get_linked_resource(
+            self.resource, RelationType.DOWN,
+            EntityType.PRODUCT_SECTIONS.value)
+        product_sections = product_sections_res.xpath(
+            'ovf:ProductSection', namespaces=NSMAP)
+        product_sections_info = []
+        for product_section in product_sections:
+            product_section_info = {}
+            product_section_info['info'] = product_section.Info
+            properties = product_section.xpath(
+                'ovf:Property', namespaces=NSMAP)
+            for property in properties:
+                product_section_info[property.get(
+                    '{' + NSMAP['ovf'] +
+                    '}key')] = property.get('{' + NSMAP['ovf'] + '}value')
+            product_sections_info.append(product_section_info)
+        return product_sections_info
+
+    def update_product_section(self,
+                               key,
+                               type='string',
+                               class_name='',
+                               instance_name='',
+                               value='',
+                               label=None,
+                               is_password=False,
+                               user_configurable=False):
+        """Update product section of vapp.
+
+        :param str key: key for property in product section of App.
+        :param str type: value type for property in product section of App.
+        :param str class_name: class name for product section of vapp.
+        :param str instance_name: instance name for product section of vapp.
+        :param str value: value for property in product section of App.
+        :param str label: label for property in product section of App.
+        :param str is_password: value for property is password or not in
+            product section of App.
+        :param str user_configurable: value for property is user configurable
+            or not in product section of App.
+
+        :return: an object containing EntityType.TASK XML data which represents
+            the asynchronous task that is updating the vApp product section.
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        property = E_OVF.Property()
+        property.set('{' + NSMAP['ovf'] + '}key', key)
+        if is_password:
+            property.set('{' + NSMAP['ovf'] + '}password', 'true')
+        else:
+            property.set('{' + NSMAP['ovf'] + '}password', 'false')
+        property.set('{' + NSMAP['ovf'] + '}type', type)
+        if user_configurable:
+            property.set('{' + NSMAP['ovf'] + '}userConfigurable', 'true')
+        else:
+            property.set('{' + NSMAP['ovf'] + '}userConfigurable', 'false')
+        property.set('{' + NSMAP['ovf'] + '}value', str(value))
+        if label is not None:
+            property.append(E_OVF.Label(label))
+        self.get_resource()
+        product_sections_res = self.client.get_linked_resource(
+            self.resource, RelationType.DOWN,
+            EntityType.PRODUCT_SECTIONS.value)
+        product_sections = product_sections_res.xpath(
+            'ovf:ProductSection', namespaces=NSMAP)
+        is_updated = False
+        for product_section in product_sections:
+            class_val = product_section.get('{' + NSMAP['ovf'] + '}class')
+            instance_val = product_section.get('{' + NSMAP['ovf'] +
+                                               '}instance')
+            if class_name == class_val and instance_name == instance_val:
+                properties = product_section.xpath(
+                    'ovf:Property', namespaces=NSMAP)
+                for prop in properties:
+                    id = prop.get('{' + NSMAP['ovf'] + '}key')
+                    if key == id:
+                        prop.getparent().remove(prop)
+                product_section.append(property)
+                is_updated = True
+                break
+        if not is_updated:
+            product_section = E_OVF.ProductSection()
+            if class_name is not None:
+                product_section.set('{' + NSMAP['ovf'] + '}class', class_name)
+            if instance_name is not None:
+                product_section.set('{' + NSMAP['ovf'] + '}instance',
+                                    instance_name)
+            info = E_OVF.Info()
+            product_section.append(info)
+            product_section.append(property)
+            product_sections_res.append(product_section)
+        return self.client.put_linked_resource(
+            product_sections_res,
+            rel=RelationType.EDIT,
+            media_type=EntityType.PRODUCT_SECTIONS.value,
+            contents=product_sections_res)
+
+    def list_vm_interface(self, network_name):
+        """List vm interfaces of network.
+
+        :param str network_name: name of network.
+
+        :return: a list of dictionary that contain list of interfaces.
+        :rtype: list
+        """
+        self.get_resource()
+        result = []
+        if hasattr(self.resource, 'Children') and \
+                hasattr(self.resource.Children, 'Vm'):
+            for vm in self.resource.Children.Vm:
+                local_id = vm.VAppScopedLocalId
+                if hasattr(vm, 'NetworkConnectionSection'):
+                    net_con_section = vm.NetworkConnectionSection
+                    if hasattr(net_con_section, 'NetworkConnection'):
+                        net_con = net_con_section.NetworkConnection
+                        for network_connection in net_con:
+                            vm_interface_data = {}
+                            if network_connection.get(
+                                    'network') == network_name:
+                                vm_interface_data['Name'] = network_name
+                                vm_interface_data['Local_id'] = local_id
+                                vm_interface_data['VmNicId'] = \
+                                    network_connection.NetworkConnectionIndex
+                                result.append(vm_interface_data)
+        return result
+
+    def add_vm_from_scratch(self,
+                            specs,
+                            deploy=True,
+                            power_on=True,
+                            all_eulas_accepted=True):
+        """Recompose the vApp and add vm.
+
+        :param dict specs: vm specifications, see `to_vm_item()` method
+            for specification details.
+        :param bool deploy: True, if the vApp should be deployed at
+            instantiation.
+        :param power_on: (bool): True if the vApp should be powered-on at
+            instantiation
+        :param bool all_eulas_accepted: True confirms acceptance of all
+            EULAs in the vApp.
+
+        :return: an object containing EntityType.VAPP XML data representing the
+            updated vApp.
+
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        params = E.RecomposeVAppParams(deploy='true' if deploy else 'false',
+                                       powerOn='true' if power_on else 'false')
+        params.append(self.to_vm_item(specs))
+        params.append(E.AllEULAsAccepted(all_eulas_accepted))
+        return self.client.post_linked_resource(
+            self.resource, RelationType.RECOMPOSE,
+            EntityType.RECOMPOSE_VAPP_PARAMS.value, params)
+
+    def to_vm_item(self, specs):
+        """Creates a vm CreateItem from a vm specification.
+
+        :param dict specs: a dictionary containing
+            - vm_name: (str): (required) vm name.
+            - comp_name: (str): (required) computer name.
+            - description: (str): (optional) description of the vm.
+            - os_type: (str): (required) operating system type of vm.
+            - virtual_cpu: (int): (optional) no of virtual cpu.
+            - core_per_socket: (int):(optional) core per socket in cpu.
+            - cpu_resource_mhz: (int):(optional) cpu resource frequency in Mhz
+            - memory: (int):(optional) memory in Mb.
+            - media_href: (str): (optional) boot image of os href.
+            - media_id: (str): (optional) c boot image of os id.
+            - media_name: (str): (optional)  boot image of os name.
+
+        :return: an object containing CreateItem XML element.
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        create_item = E.CreateItem()
+        create_item.set('name', specs['vm_name'])
+        desc = E.Description()
+        if 'description' in specs:
+            desc = E.Description(specs['description'])
+        create_item.append(desc)
+        guest_customization_param = E.GuestCustomizationSection()
+        guest_customization_param.append(
+            E_OVF.Info('Specifies Guest OS Customization Settings'))
+        guest_customization_param.append(E.ComputerName(specs['comp_name']))
+        create_item.append(guest_customization_param)
+        vm_spec_section = E.VmSpecSection()
+        vm_spec_section.set('Modified', 'true')
+        vm_spec_section.append(E_OVF.Info('Virtual Machine specification'))
+        vm_spec_section.append(E.OsType(specs['os_type']))
+        if 'virtual_cpu' in specs:
+            vm_spec_section.append(E.NumCpus(specs['virtual_cpu']))
+        else:
+            vm_spec_section.append(E.NumCpus(1))
+        if 'core_per_socket' in specs:
+            vm_spec_section.append(
+                E.NumCoresPerSocket(specs['core_per_socket']))
+        else:
+            vm_spec_section.append(E.NumCoresPerSocket(1))
+        cpu_resource_mhz = E.CpuResourceMhz()
+        if 'cpu_resource_mhz' in specs:
+            cpu_resource_mhz.append(E.Configured(specs['cpu_resource_mhz']))
+        else:
+            cpu_resource_mhz.append(E.Configured(0))
+        vm_spec_section.append(cpu_resource_mhz)
+        memory_resource_mb = E.MemoryResourceMb()
+        if 'memory' in specs:
+            memory_resource_mb.append(E.Configured(specs['memory']))
+        else:
+            memory_resource_mb.append(E.Configured(512))
+        vm_spec_section.append(memory_resource_mb)
+        vm_spec_section.append(E.DiskSection())
+        vm_spec_section.append(E.HardwareVersion('vmx-14'))
+        vm_spec_section.append(E.VirtualCpuType('VM64'))
+        create_item.append(vm_spec_section)
+        if 'media_href' in specs and 'media_id' in specs and 'media_name' in \
+                specs:
+            media = E.Media()
+            media.set('href', specs['media_href'])
+            media.set('id', specs['media_id'])
+            media.set('name', specs['media_name'])
+            create_item.append(media)
+        return create_item

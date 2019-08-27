@@ -43,6 +43,8 @@ from pyvcloud.vcd.exceptions import AccessForbiddenException, \
 SIZE_1MB = 1024 * 1024
 
 NSMAP = {
+    'ns10':
+    'http://www.vmware.com/vcloud/v1.5',
     'ovf':
     'http://schemas.dmtf.org/ovf/envelope/1',
     'ovfenv':
@@ -100,12 +102,14 @@ class ApiVersion(Enum):
     VERSION_30 = '30.0'
     VERSION_31 = '31.0'
     VERSION_32 = '32.0'
+    VERSION_33 = '33.0'
 
 
 # Important! Values must be listed in ascending order.
 API_CURRENT_VERSIONS = [
     ApiVersion.VERSION_29.value, ApiVersion.VERSION_30.value,
-    ApiVersion.VERSION_31.value, ApiVersion.VERSION_32.value
+    ApiVersion.VERSION_31.value, ApiVersion.VERSION_32.value,
+    ApiVersion.VERSION_33.value
 ]
 
 
@@ -130,6 +134,7 @@ class VmNicProperties(Enum):
     IP_ADDRESS_MODE = 'ip_address_mode'
     IP_ADDRESS = 'ip_address'
     ADAPTER_TYPE = 'adapter_type'
+    MAC_ADDRESS = 'mac_address'
 
 
 VCLOUD_STATUS_MAP = {
@@ -163,9 +168,11 @@ class BasicLoginCredentials(object):
 class RelationType(Enum):
     ADD = 'add'
     ALTERNATE = 'alternate'
+    CHECK_COMPLIANCE = 'checkCompliance'
     CONSOLIDATE = 'consolidate'
     CONTROL_ACCESS = 'controlAccess'
     CONVERT_TO_ADVANCED_GATEWAY = 'edgeGateway:convertToAdvancedGateway'
+    CUSTOMIZE_AT_NEXT_POWERON = 'customizeAtNextPowerOn'
     DEPLOY = 'deploy'
     DISABLE = 'disable'
     DISABLE_GATEWAY_DISTRIBUTED_ROUTING = \
@@ -189,9 +196,11 @@ class RelationType(Enum):
     GATEWAY_SYNC_SYSLOG_SETTINGS = 'edgeGateway:syncSyslogSettings'
     GATEWAY_SYS_SERVER_SETTING_IP = 'edgeGateway:configureSyslogServerSettings'
     GATEWAY_UPDATE_PROPERTIES = 'edgeGateway:updateProperties'
+    GUEST_CUSTOMIZATION_SECTION = 'guestCustomizationSection'
     INSERT_MEDIA = 'media:insertMedia'
     INSTALL_VMWARE_TOOLS = 'installVmwareTools'
     LINK_TO_TEMPLATE = 'linkToTemplate'
+    METRICS = 'metrics'
     MIGRATE_VMS = 'migrateVms'
     MODIFY_FORM_FACTOR = 'edgeGateway:modifyFormFactor'
     NEXT_PAGE = 'nextPage'
@@ -204,6 +213,9 @@ class RelationType(Enum):
     POWER_SUSPEND = 'power:suspend'
     PUBLISH = 'publish'
     RECOMPOSE = 'recompose'
+    RECONFIGURE_VM = 'reconfigureVm'
+    RELOAD_FROM_VC = 'reloadFromVc'
+    RELOCATE = 'relocate'
     REMOVE = 'remove'
     REPAIR = 'repair'
     RIGHTS = 'rights'
@@ -211,6 +223,7 @@ class RelationType(Enum):
     SNAPSHOT_CREATE = 'snapshot:create'
     SNAPSHOT_REVERT_TO_CURRENT = 'snapshot:revertToCurrent'
     SNAPSHOT_REMOVE_ALL = 'snapshot:removeAll'
+    SYNC_SYSLOG_SETTINGS = 'syncSyslogSettings'
     TASK_CANCEL = 'task:cancel'
     UNDEPLOY = 'undeploy'
     UNLINK_FROM_TEMPLATE = 'unlinkFromTemplate'
@@ -325,10 +338,17 @@ class EntityType(Enum):
     CATALOG = 'application/vnd.vmware.vcloud.catalog+xml'
     CAPTURE_VAPP_PARAMS = \
         'application/vnd.vmware.vcloud.captureVAppParams+xml'
+    CHECK_POST_GUEST_CUSTOMIZATION_SECTION = \
+        'application/vnd.vmware.vcloud.vm.' \
+        'checkPostGuestCustomizationSection+xml'
     CLONE_VAPP_PARAMS = 'application/vnd.vmware.vcloud.cloneVAppParams+xml'
     COMPOSE_VAPP_PARAMS = \
         'application/vnd.vmware.vcloud.composeVAppParams+xml'
+    COMPLIANCE_RESULT = 'application/vnd.vmware.vm.complianceResult+xml'
     CONTROL_ACCESS_PARAMS = 'application/vnd.vmware.vcloud.controlAccess+xml'
+    CURRENT_USAGE = \
+        'application/vnd.vmware.vcloud.metrics.currentUsageSpec+xml'
+    DATASTORE_REFERENCES = 'application/vnd.vmware.admin.datastoreList+xml'
     DEFAULT_CONTENT_TYPE = 'application/*+xml'
     DEPLOY = 'application/vnd.vmware.vcloud.deployVAppParams+xml'
     DISK = 'application/vnd.vmware.vcloud.disk+xml'
@@ -349,6 +369,10 @@ class EntityType(Enum):
         'application/vnd.vmware.admin.vmwExternalNetworkReferences+xml'
     INSTANTIATE_VAPP_TEMPLATE_PARAMS = \
         'application/vnd.vmware.vcloud.instantiateVAppTemplateParams+xml'
+    GUEST_CUSTOMIZATION_SECTION = \
+        'application/vnd.vmware.vcloud.guestCustomizationSection+xml'
+    HISTORIC_USAGE = \
+        'application/vnd.vmware.vcloud.metrics.historicUsageSpec+xml'
     LEASE_SETTINGS = 'application/vnd.vmware.vcloud.leaseSettingsSection+xml'
     MEDIA = 'application/vnd.vmware.vcloud.media+xml'
     MEDIA_INSERT_OR_EJECT_PARAMS = \
@@ -363,12 +387,15 @@ class EntityType(Enum):
     NETWORK_POOL_REFERENCES = \
         'application/vnd.vmware.admin.vmwNetworkPoolReferences+xml'
     NSXT_MANAGER = 'application/vnd.vmware.admin.nsxTmanager+xml'
+    OPERATING_SYSTEM_SECTION = \
+        'application/vnd.vmware.vcloud.operatingSystemSection+xml'
     ORG = 'application/vnd.vmware.vcloud.org+xml'
     ORG_NETWORK = 'application/vnd.vmware.vcloud.orgNetwork+xml'
     ORG_LIST = 'application/vnd.vmware.vcloud.orgList+xml'
     ORG_RIGHTS = 'application/vnd.vmware.admin.org.rights+xml'
     ORG_VDC_NETWORK = 'application/vnd.vmware.vcloud.orgVdcNetwork+xml'
     OWNER = 'application/vnd.vmware.vcloud.owner+xml'
+    PRODUCT_SECTIONS = 'application/vnd.vmware.vcloud.productSections+xml'
     PROVIDER_VDC = 'application/vnd.vmware.admin.providervdc+xml'
     PROVIDER_VDC_PARAMS = \
         'application/vnd.vmware.admin.createProviderVdcParams+xml'
@@ -382,6 +409,7 @@ class EntityType(Enum):
     RECORDS = 'application/vnd.vmware.vcloud.query.records+xml'
     REGISTER_VC_SERVER_PARAMS = \
         'application/vnd.vmware.admin.registerVimServerParams+xml'
+    RELOCATE_PARAMS = 'application/vnd.vmware.vcloud.relocateVmParams+xml'
     RESOURCE_POOL_LIST = \
         'application/vnd.vmware.admin.resourcePoolList+xml'
     RES_POOL_SET_UPDATE_PARAMS = \
@@ -390,6 +418,7 @@ class EntityType(Enum):
     RIGHT = 'application/vnd.vmware.admin.right+xml'
     RIGHTS = 'application/vnd.vmware.admin.rights+xml'
     SNAPSHOT_CREATE = 'application/vnd.vmware.vcloud.createSnapshotParams+xml'
+    STARTUP_SECTION = 'application/vnd.vmware.vcloud.startupSection+xml'
     SYSTEM_SETTINGS = 'application/vnd.vmware.admin.systemSettings+xml'
     TASK = 'application/vnd.vmware.vcloud.task+xml'
     TASKS_LIST = 'application/vnd.vmware.vcloud.tasksList+xml'
@@ -404,12 +433,21 @@ class EntityType(Enum):
     VAPP_TEMPLATE = 'application/vnd.vmware.vcloud.vAppTemplate+xml'
     VDC = 'application/vnd.vmware.vcloud.vdc+xml'
     VDC_ADMIN = 'application/vnd.vmware.admin.vdc+xml'
+    VDC_COMPUTE_POLICY_REFERENCES = \
+        "application/vnd.vmware.vcloud.vdcComputePolicyReferences+xml"
     VDC_REFERENCES = 'application/vnd.vmware.admin.vdcReferences+xml'
     VDCS_PARAMS = 'application/vnd.vmware.admin.createVdcParams+xml'
     VIM_SERVER_REFS = 'application/vnd.vmware.admin.vmwVimServerReferences+xml'
     VIRTUAL_CENTER = 'application/vnd.vmware.admin.vmwvirtualcenter+xml'
     VM = 'application/vnd.vmware.vcloud.vm+xml'
+    VM_BOOT_OPTIONS = 'application/vnd.vmware.vcloud.bootOptionsSection+xml'
+    VM_CAPABILITIES_SECTION = \
+        'application/vnd.vmware.vcloud.vmCapabilitiesSection+xml'
     VMS = 'application/vnd.vmware.vcloud.vms+xml'
+    VM_SCREEN_ACQUIRE_TICKET = \
+        'application/vnd.vmware.vcloud.screenTicket+xml'
+    VM_SCREEN_ACQUIRE_MKSTICKET = \
+        'application/vnd.vmware.vcloud.mksTicket+xml'
     VMW_PROVIDER_VDC_RESOURCE_POOL = \
         'application/vnd.vmware.admin.vmwProviderVdcResourcePool+xml'
     VMW_PROVIDER_VDC_RESOURCE_POOL_SET = \
@@ -716,7 +754,8 @@ class Client(object):
         self._task_monitor = None
         self._verify_ssl_certs = verify_ssl_certs
 
-        self._logger = logging.getLogger(log_file)
+        self._logger = None
+        self._get_defaut_logger(file_name=log_file)
         self._logger.setLevel(logging.DEBUG)
         # This makes sure that we don't append a new handler to the logger
         # every time we create a new client.
@@ -744,6 +783,44 @@ class Client(object):
         self.fsencoding = sys.getfilesystemencoding()
 
         self._is_sysadmin = False
+
+    def _get_defaut_logger(self, file_name="vcd_pysdk.log",
+                           log_level=logging.DEBUG,
+                           max_bytes=30000000, backup_count=30):
+        """This will set the default logger with Rotating FileHandler.
+
+        Open the specified file and use it as the stream for logging.
+        By default, the file grows indefinitely. You can specify particular
+        values of maxBytes and backupCount to allow the file to rollover at
+        a predetermined size.
+        Rollover occurs whenever the current log file is nearly maxBytes in
+        length. If backupCount is >= 1, the system will successively create
+        new files with the same pathname as the base file, but with extensions
+        ".1", ".2" etc. appended to it. For example, with a backupCount of 5
+        and a base file name of "app.log", you would get "app.log",
+        "app.log.1", "app.log.2", ... through to "app.log.5". The file being
+        written to is always "app.log" - when it gets filled up, it is closed
+        and renamed to "app.log.1", and if files "app.log.1", "app.log.2" etc.
+        exist, then they are renamed to "app.log.2", "app.log.3" etc.
+        respectively.
+
+        :param file_name: name of the log file.
+        :param log_level: log level.
+        :param max_bytes: max size of log file in bytes.
+        :param backup_count: no of backup count.
+        """
+        if file_name is None:
+            file_name = "vcd_pysdk.log"
+        self._logger = logging.getLogger(file_name)
+        file = Path(file_name)
+        if not file.exists():
+            file.parent.mkdir(parents=True, exist_ok=True)
+        if not self._logger.handlers:
+            default_log_handler = handlers.RotatingFileHandler(
+                filename=file_name, maxBytes=max_bytes,
+                backupCount=backup_count)
+            default_log_handler.setLevel(log_level)
+            self._logger.addHandler(default_log_handler)
 
     def _get_response_request_id(self, response):
         """Extract request id of a request to vCD from the response.
@@ -1475,6 +1552,50 @@ class Client(object):
             raise ClientException(
                 'The current user does not have access to the resource (%s).' %
                 str(wk_type).split('.')[-1])
+
+    def get_resource_link_from_query_object(self,
+                                            resource,
+                                            rel=RelationType.DOWN,
+                                            media_type=None,
+                                            type=None):
+        """Returns all the links of the specified rel and type in the resource.
+
+        This method take resource and find the query link of provided type.
+        It processes query link and get query result records.
+        It search href and name of non link type from query result records and
+            makes list of links and return.
+        Ex: In API version 33 org contain vdc query link.
+        It take org resources and find the query link for vdc.
+        Process the query link and fetch all vdc links and make a list of
+            links.
+
+        :param lxml.objectify.ObjectifiedElement resource: the resource with
+            the links.
+        :param RelationType rel: the rel of the desired link.
+        :param str media_type: media type of content.
+        :param str type: type of query.
+        :return: list of lxml.objectify.ObjectifiedElement objects, where each
+            object contains a Link XML element. Result could include an empty
+            list.
+        :rtype: list
+        """
+        links = get_links(resource=resource, media_type=media_type)
+        for query_link in links:
+            link_href = query_link.href
+            list_of_links = []
+            if type in link_href.lower():
+                link_part = link_href.split('&')
+                if len(link_part) == 2:
+                    link_href = link_part[0] + '&;' + link_part[1]
+                record_resource = self.get_resource(link_href)
+                for record in record_resource.getchildren():
+                    if record.tag != '{http://www.vmware.com/vcloud/v1.5}Link':
+                        link = E.Link()
+                        link.set('name', record.get('name'))
+                        link.set('href', record.get('href'))
+                        link.set('rel', rel.value)
+                        list_of_links.append(Link(link))
+                return list_of_links
 
 
 def find_link(resource, rel, media_type, fail_if_absent=True, name=None):

@@ -27,6 +27,7 @@ from pygments import formatters
 from pygments import highlight
 from pygments import lexers
 
+from pyvcloud.vcd.client import ApiVersion
 from pyvcloud.vcd.client import EntityType
 from pyvcloud.vcd.client import get_links
 from pyvcloud.vcd.client import NSMAP
@@ -64,22 +65,30 @@ def org_to_dict(org):
     :rtype: dict
     """
     result = {}
-    result['name'] = org.get('name')
-    result['id'] = extract_id(org.get('id'))
-    result['full_name'] = str('%s' % org.FullName)
-    result['description'] = str('%s' % org.Description)
-    result['vdcs'] = [
-        str(n.name) for n in get_links(org, media_type=EntityType.VDC.value)
-    ]
+    result['name'] = org.resource.get('name')
+    result['id'] = extract_id(org.resource.get('id'))
+    result['full_name'] = str('%s' % org.resource.FullName)
+    result['description'] = str('%s' % org.resource.Description)
     result['org_networks'] = [
-        str(n.name)
-        for n in get_links(org, media_type=EntityType.ORG_NETWORK.value)
+        str(n.name) for n in get_links(org.resource,
+                                       media_type=EntityType.ORG_NETWORK.value)
     ]
-    result['catalogs'] = [
-        str(n.name)
-        for n in get_links(org, media_type=EntityType.CATALOG.value)
-    ]
+    org_to_dict_vdc_catalog(org, result=result)
     return result
+
+
+def org_to_dict_vdc_catalog(org, result):
+    if org.client.get_api_version() < ApiVersion.VERSION_33.value:
+        vdc_links = get_links(org.resource, media_type=EntityType.VDC.value)
+        catalog_links = get_links(org.resource,
+                                  media_type=EntityType.CATALOG.value)
+    else:
+        vdc_links = org.client.get_resource_link_from_query_object(
+            org.resource, media_type=EntityType.RECORDS.value, type='vdc')
+        catalog_links = org.client.get_resource_link_from_query_object(
+            org.resource, media_type=EntityType.RECORDS.value, type='catalog')
+    result['vdcs'] = [str(n.name) for n in vdc_links]
+    result['catalogs'] = [str(n.name) for n in catalog_links]
 
 
 def vdc_to_dict(vdc, access_control_settings=None):
@@ -762,6 +771,43 @@ def get_admin_href(href):
         return href.replace('/api/', '/api/admin/')
 
 
+def get_non_admin_href(href):
+    """Returns non admin version of a given vCD url.
+
+    This function is idempotent, which also means that if input href is already
+    a non admin href no further action would be taken.
+
+    :param str href: the admin href whose non admin href version we need.
+
+    :return: non admin version of the href.
+
+    :rtype: str
+    """
+    if '/api/admin/extension/' in href:
+        return href.replace('/api/admin/extension', '/api/')
+    elif '/api/admin/' in href:
+        return href.replace('/api/admin/', '/api/')
+    else:
+        return href
+
+
+def is_admin(href):
+    """Returns True if provided href has /api/admin into it.
+
+    :param str href: href
+
+    :return: True if admin else False
+
+    :rtype: Boolean
+    """
+    if '/api/admin/extension/' in href:
+        return False
+    elif '/api/admin/' in href:
+        return True
+    else:
+        return False
+
+
 def get_admin_extension_href(href):
     """Returns sys admin version of a given vCD url.
 
@@ -886,6 +932,34 @@ def build_network_url_from_gateway_url(gateway_href):
         return network_url.replace(_GATEWAY_ADMIN_API_URL, _NETWORK_URL)
 
     return None
+
+
+def retrieve_compute_policy_id_from_href(href):
+    """Extract compute policy id from href.
+
+    :param str href: URI of the compute policy
+
+    :return: compute policy id
+
+    :rtype: str
+    """
+    return href.split('/')[-1]
+
+
+def uri_to_api_uri(uri):
+    """Convert any uri to api uri.
+
+    Provided uri as
+    https://10.150.198.98/api/vdc/93b5fa47-d571-4d71-9caf-7af6ed4fab1f will be
+    converted to https://10.150.198.98/api.
+
+    :param uri
+    :return api_uri
+    :rtype str
+    """
+    uri_components = uri.split('/')
+    api_uri = '/'.join(uri_components[:4])
+    return api_uri
 
 
 class Transform(object):

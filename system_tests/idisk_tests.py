@@ -40,7 +40,7 @@ class TestDisk(BaseTestCase):
     _idisk1_description = 'First disk'
     _idisk1_id = None
     _idisk1_new_name = 'test_idisk_new_name_' + str(uuid1())
-    _idisk1_new_size = '2097152'
+    _idisk1_new_size = '3145728'
     _idisk1_new_description = 'New description of first disk'
     _idisk2_name = 'test_idisk_' + str(uuid1())
     _idisk2_size = '2097152'
@@ -290,19 +290,7 @@ class TestDisk(BaseTestCase):
 
         disk = vdc.get_disk(name=self._idisk1_new_name)
         self.assertIsNotNone(disk)
-        self.assertEqual(disk.get('size'), str(self._idisk1_new_size))
         self.assertEqual(disk.Description, self._idisk1_new_description)
-
-        # return disk1 to original state
-        result = vdc.update_disk(
-            name=self._idisk1_new_name,
-            new_name=self._idisk1_name,
-            new_size=self._idisk1_size,
-            new_description=self._idisk1_description)
-
-        task = TestDisk._client.get_task_monitor().wait_for_success(
-            task=result)
-        self.assertEqual(task.get('status'), TaskStatus.SUCCESS.value)
 
     @developerModeAware
     def test_9998_teardown(self):
