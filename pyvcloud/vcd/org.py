@@ -1040,7 +1040,7 @@ class Org(object):
         if self.client.is_sysadmin():
             resource_type = ResourceType.ADMIN_USER.value
             org_filter = 'org==%s' % \
-                urllib.parse.quote_plus(self.resource.get('href'))
+                         urllib.parse.quote_plus(self.resource.get('href'))
         query = self.client.get_typed_query(
             resource_type,
             query_result_format=QueryResultFormat.RECORDS,
@@ -1149,7 +1149,7 @@ class Org(object):
         if self.client.is_sysadmin():
             resource_type = ResourceType.ADMIN_ROLE.value
             org_filter = 'org==%s' % \
-                urllib.parse.quote_plus(self.resource.get('href'))
+                         urllib.parse.quote_plus(self.resource.get('href'))
 
         query = self.client.get_typed_query(
             resource_type,
@@ -1848,8 +1848,7 @@ class Org(object):
                     vm.VdcComputePolicy.set('href', compute_policy_href)
                     vm.VdcComputePolicy.set('id', policy_id)
                 else:
-                    date_created_node = vm.\
-                        find('{http://www.vmware.com/vcloud/v1.5}DateCreated')
+                    date_created_node = vm.find('{http://www.vmware.com/vcloud/v1.5}DateCreated')
                     policy_element = E.VdcComputePolicy()
                     policy_element.set('href', compute_policy_href)
                     policy_element.set('id', policy_id)
@@ -1948,3 +1947,23 @@ class Org(object):
                 template_href,
                 template_resource,
                 media_type=EntityType.VAPP_TEMPLATE.value)
+
+    def create_group(self,
+                     name,
+                     role_href):
+        """Create a Group.
+
+        :param str name: name of the group.
+        :param str role_href: href of the role for the imported group.
+
+        :return: an object containing EntityType.GROUP XML data describing the
+            group that just got created.
+
+        :rtype: lxml.objectify.ObjectifiedElement
+        """
+        resource_admin = self.client.get_resource(self.href_admin)
+        group = E.Group(
+            E.Role(href=role_href),
+            name=name)
+        return self.client.post_linked_resource(
+            resource_admin, RelationType.ADD, EntityType.GROUP.value, group)
