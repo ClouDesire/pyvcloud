@@ -132,6 +132,26 @@ class VDC(object):
             self.name = self.resource.get('name')
             self.href = self.resource.get('href')
 
+    def get_vapp_href(self, name):
+        name_filter = ('name', name)
+        vdc_filter = 'vdc==%s' % self.href
+        resource_type = ResourceType.VAPP.value
+        if self.client.is_sysadmin():
+            resource_type = ResourceType.ADMIN_VAPP.value
+        q1 = self.client.get_typed_query(
+            resource_type,
+            query_result_format=QueryResultFormat.RECORDS,
+            equality_filter=name_filter,
+            qfilter=vdc_filter)
+        records = list(q1.execute())
+        if records is None or len(records) == 0:
+            raise EntityNotFoundException(
+                'Vapp with name \'%s\' not found.' % name)
+        elif len(records) > 1:
+            raise MultipleRecordsException("Found multiple vapp named "
+                                           "'%s'," % name)
+        return records[0].get('href')
+
     def get_vapp(self, name):
         """Fetches XML representation of a vApp in the org vdc from vCD.
 
@@ -146,7 +166,7 @@ class VDC(object):
         :raises: MultipleRecordsException: if more than one vApp with the
             provided name are found.
         """
-        return self.client.get_resource(self.get_resource_href(name))
+        return self.client.get_resource(self.get_vapp_href(name))
 
     def delete_vapp(self, name, force=False):
         """Delete a vApp in the current org vdc.
@@ -157,7 +177,7 @@ class VDC(object):
         :raises: MultipleRecordsException: if more than one vApp with the
             provided name are found.
         """
-        href = self.get_resource_href(name)
+        href = self.get_vapp_href(name)
         return self.client.delete_resource(href, force=force)
 
     # NOQA refer to http://pubs.vmware.com/vcd-820/index.jsp?topic=%2Fcom.vmware.vcloud.api.sp.doc_27_0%2FGUID-BF9B790D-512E-4EA1-99E8-6826D4B8E6DC.html
@@ -631,14 +651,14 @@ class VDC(object):
 
         if new_size is not None:
             if self.client.get_api_version() < ApiVersion.VERSION_33.value:
-                disk_params.set('size', new_size)
+                disk_params.set('size', str(new_size))
             else:
                 size = int(int(new_size) / SIZE_1MB)
                 disk_params.set('sizeMb', str(size))
         else:
             if self.client.get_api_version() < ApiVersion.VERSION_33.value:
                 size = disk.get('size')
-                disk_params.set('size', size)
+                disk_params.set('size', str(size))
             else:
                 size = disk.get('sizeMb')
                 disk_params.set('sizeMb', str(size))
@@ -2308,7 +2328,7 @@ class VDC(object):
         policy_list = []
         for policy_reference in policy_references.VdcComputePolicyReference:
             policy_list.append(policy_reference)
-        return policy_reference
+        return policy_list
 
     def add_compute_policy(self, href):
         """Add a VdcComputePolicy.

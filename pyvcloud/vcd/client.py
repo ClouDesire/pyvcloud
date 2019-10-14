@@ -1589,9 +1589,7 @@ class Client(object):
             link_href = query_link.href
             list_of_links = []
             if type in link_href.lower():
-                link_part = link_href.split('&')
-                if len(link_part) == 2:
-                    link_href = link_part[0] + '&;' + link_part[1]
+                link_href = urllib.parse.unquote(link_href)
                 record_resource = self.get_resource(link_href)
                 for record in record_resource.getchildren():
                     if record.tag != '{http://www.vmware.com/vcloud/v1.5}Link':

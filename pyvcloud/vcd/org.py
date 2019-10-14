@@ -47,7 +47,9 @@ from pyvcloud.vcd.exceptions import UploadException
 from pyvcloud.vcd.metadata import Metadata
 from pyvcloud.vcd.system import System
 from pyvcloud.vcd.utils import get_admin_href
+from pyvcloud.vcd.utils import get_non_admin_href
 from pyvcloud.vcd.utils import get_safe_members_in_tar_file
+from pyvcloud.vcd.utils import is_admin
 from pyvcloud.vcd.utils import retrieve_compute_policy_id_from_href
 from pyvcloud.vcd.utils import to_dict
 
@@ -1602,12 +1604,15 @@ class Org(object):
                 if is_admin_operation:
                     href = get_admin_href(link.href)
                 else:
-                    href = link.href
+                    href = get_non_admin_href(link.href)
                 return self.client.get_resource(href)
         return None
 
-    def list_vdcs(self):
+    def list_vdcs(self, is_admin_url=False):
         """List all vdc that are backing the current organization.
+
+        :param is_admin_url if this parameter is true, vdc href will be admin
+                            href
 
         :return: list of dictionaries, where each dictionary contains 'name'
             and 'href' of a vdc in the organization.
@@ -1622,10 +1627,32 @@ class Org(object):
             links = get_links(self.resource, media_type=EntityType.VDC.value)
         else:
             links = self.client.get_resource_link_from_query_object(
-                self.resource, media_type=EntityType.RECORDS.value, type='vdc')
+                self.resource, media_type=EntityType.RECORDS.value,
+                type='vdc')
         for v in links:
-            result.append({'name': v.name, 'href': v.href})
+            if self.client.is_sysadmin():
+                href = self. \
+                    convert_href_based_on_flag(href=v.href,
+                                               is_admin_url=is_admin_url)
+            else:
+                if not is_admin_url:
+                    href = self. \
+                        convert_href_based_on_flag(href=v.href,
+                                                   is_admin_url=is_admin_url)
+                else:
+                    href = 'ACCESS_FORBIDDEN'
+
+            result.append({'name': v.name, 'href': href})
         return result
+
+    def convert_href_based_on_flag(self, href, is_admin_url):
+        if is_admin_url:
+            if not is_admin(href):
+                href = get_admin_href(href)
+        else:
+            if is_admin(href):
+                href = get_non_admin_href(href)
+        return href
 
     def get_all_metadata_from_catalog_item(self, catalog_name,
                                            item_name):
