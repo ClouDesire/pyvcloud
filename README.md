@@ -1,8 +1,8 @@
-## pyvcloud
+## FORK ALERT
 
-[![License](https://img.shields.io/pypi/l/pyvcloud.svg)](https://pypi.python.org/pypi/pyvcloud) [![Stable Version](https://img.shields.io/pypi/v/pyvcloud.svg)](https://pypi.python.org/pypi/pyvcloud) [![Build Status](https://img.shields.io/travis/vmware/pyvcloud.svg?style=flat)](https://travis-ci.org/vmware/pyvcloud/)
+This is a fork that contains some merged PRs submited on the official repository.
+The package is publicated on [pypi.org/project/cloudesire-pyvcloud/](https://pypi.org/project/cloudesire-pyvcloud/)
 
-`pyvcloud` is the Python SDK for VMware vCloud Director.
 
 Supported API versions are 29.0, 30.0, 31.0, 32.0 and 33.0.
 

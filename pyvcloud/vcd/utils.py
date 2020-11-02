@@ -21,6 +21,7 @@ from os.path import realpath
 
 import humanfriendly
 from lxml import etree
+from lxml import objectify
 from lxml.objectify import NoneElement
 from pygments import formatters
 from pygments import highlight
@@ -149,6 +150,10 @@ def vdc_to_dict(vdc, access_control_settings=None):
         result['allocation_model'] = str(vdc.AllocationModel)
     if hasattr(vdc, 'VmQuota'):
         result['vm_quota'] = int(vdc.VmQuota)
+    if hasattr(vdc, 'NicQuota'):
+        result['nic_quota'] = int(vdc.NicQuota)
+    if hasattr(vdc, 'NetworkQuota'):
+        result['network_quota'] = int(vdc.NetworkQuota)
     if hasattr(vdc, 'Capabilities') and \
             hasattr(vdc.Capabilities, 'SupportedHardwareVersions') and \
             hasattr(vdc.Capabilities.SupportedHardwareVersions,
@@ -1111,3 +1116,54 @@ def update_vm_compute_policy_element(api_version,
         vm_sizing_policy_element.set('type', 'application/json')
 
     return update_required
+class Transform(object):
+    """Provides advanced transformations."""
+
+    def list_to_objectify(self, data, root):
+        """Convert a specific formatted list into a objectify object.
+
+        Ex: List maintains the order of the elements.
+            Sub-elements are provided with inner list
+        data = [ { 'Tag1': 'Value1' },
+                 { 'SubRoot1': [
+                    { 'SubTag1': 'SubValue1'}] }
+        ]
+
+        :param list data: list containing the children elements of the root
+        :param str root: root element where children to be added
+        :return: objectified root element with children added
+
+        :rtype: objectified element of list data
+        """
+        root_element = objectify.Element(root)
+        flag_child_added = False
+        for item in data:
+            if (type(item) is not dict):
+                raise ValueError('Dictionary expected. Got ' + item)
+
+            if (len(item) != 1):
+                raise ValueError(
+                    "Expecting only one element got {}".
+                    format(str(len(item))))
+
+            for key in item:
+                value = item[key]
+
+                # If the value is a list call the function again
+                if (type(value) is list):
+                    sub_root_element = key
+                    sub_item = item[key]
+                    tr = Transform()
+                    (sub_element, sub_flag_child_added) = \
+                        tr.list_to_objectify(sub_item, sub_root_element)
+                    if sub_flag_child_added:
+                        root_element.append(sub_element)
+                else:
+                    if value is not None:
+                        root_element[key] = value
+                        flag_child_added = True
+
+        # Clean and remove namespaces
+        objectify.deannotate(root_element)
+        etree.cleanup_namespaces(root_element)
+        return (root_element, flag_child_added)

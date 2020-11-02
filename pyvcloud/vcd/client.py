@@ -376,6 +376,7 @@ class EntityType(Enum):
     EXTERNAL_NETWORK = 'application/vnd.vmware.admin.vmwexternalnet+xml'
     EXTERNAL_NETWORK_REFS = \
         'application/vnd.vmware.admin.vmwExternalNetworkReferences+xml'
+    GROUP = 'application/vnd.vmware.admin.group+xml'
     GUEST_CUSTOMIZATION_SECTION = \
         'application/vnd.vmware.vcloud.guestCustomizationSection+xml'
     HISTORIC_USAGE = \
@@ -687,7 +688,11 @@ def _objectify_response(response, as_object=True):
     """
     if _response_has_content(response):
         if as_object:
-            return objectify.fromstring(response.content)
+            patched_content = response.content\
+                .decode('utf-8')\
+                .replace('<index>', '<_index>')\
+                .replace('</index>', '</_index>')
+            return objectify.fromstring(patched_content.encode('utf-8'))
         else:
             return etree.fromstring(response.content)
     else:
